@@ -1,0 +1,12 @@
+[package]
+name = "zeldalike"
+version = "0.1.0"
+authors = ["BitSpittle <bit.spittle@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+game2d = { path = "../game2d" }
+
+[dependencies.ggez]
+version = "0.4.4"
+features = ["cargo-resource-root"]
