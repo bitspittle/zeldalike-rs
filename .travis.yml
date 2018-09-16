@@ -1,0 +1,41 @@
+language: rust
+os:
+  - linux
+  - osx
+git:
+  depth: false
+  quiet: true
+rust:
+  - stable
+branches:
+  only:
+  - master
+matrix:
+  fast_finish: true
+cache: cargo
+
+addons:
+  apt:
+   packages:
+     # Dependencies of ggez
+     - libasound2-dev
+
+install:
+  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then
+      wget http://libsdl.org/release/SDL2-2.0.5.tar.gz
+      && tar -xzvf SDL2-2.0.5.tar.gz
+      && pushd SDL2-2.0.5 && ./configure --prefix=/usr && make && sudo make install && popd;
+    fi
+  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then
+      brew update
+      && brew install sdl2;
+    fi
+
+before_script:
+  - export PATH=$HOME/.cargo/bin:$PATH
+
+script:
+  - cargo build
+  - cargo test --verbose --package game2d
+  - cargo bench --verbose --package game2d
+ 
