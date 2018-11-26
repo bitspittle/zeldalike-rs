@@ -37,6 +37,11 @@ impl P2 {
     pub fn zero() -> P2 {
         P2::new(0., 0.)
     }
+
+    /// Whether this point is set to (0., 0.) or not
+    pub fn is_zero(self) -> bool {
+        self.x == 0. && self.y == 0.
+    }
 }
 
 impl Default for P2 {
@@ -203,11 +208,16 @@ impl V2 {
         self.len2().sqrt()
     }
 
+    /// Whether this vector is set to (0., 0.) or not
+    pub fn is_zero(self) -> bool {
+        self.x == 0. && self.y == 0.
+    }
+
     /// A normalized copy of this vector.
     ///
     /// Note: The zero vector returns itself
     pub fn normalized(self) -> V2 {
-        if self == V2::zero() {
+        if self.is_zero() {
             self
         } else {
             self / self.len()

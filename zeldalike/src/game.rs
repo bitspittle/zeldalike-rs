@@ -1,17 +1,20 @@
 //! Main classes for processing and running the game
 
-use game2d::geom::{P2, V2};
-
 use ggez::conf::{Conf, WindowMode, WindowSetup};
 use ggez::event::{self, EventHandler, Keycode, Mod};
-use ggez::graphics::{self, Color, DrawParam, Image, Point2};
+use ggez::graphics::{self, Color, DrawMode, DrawParam, Image, Point2, Rect};
+use ggez::timer;
 use ggez::{Context, GameResult};
+
+use game2d::collide::{BodyHandle, CollisionWorld};
+use game2d::geom::{P2, V2};
 
 /// Global game settings
 struct GameConfig {
     tile_size: V2,
     board_size: V2,
     win_scale: f32, // Scale board size to window size
+    show_collision_outlines: bool,
 }
 
 impl Default for GameConfig {
@@ -20,6 +23,7 @@ impl Default for GameConfig {
             tile_size: V2::new(16., 16.),
             board_size: V2::new(160., 144.),
             win_scale: 4.,
+            show_collision_outlines: false,
         }
     }
 }
@@ -64,6 +68,7 @@ struct Entity {
     pos: P2,
     size: V2,
     image: Image,
+    body_handle: Option<BodyHandle>,
 }
 
 impl Entity {
@@ -72,6 +77,7 @@ impl Entity {
             pos: P2::zero(),
             size,
             image,
+            body_handle: None,
         }
     }
 
@@ -106,6 +112,7 @@ impl Entity {
 struct GameState {
     config: GameConfig,
     input: InputState,
+    collision_world: CollisionWorld,
     player: Entity,
     walls: Vec<Entity>,
 }
@@ -115,9 +122,11 @@ impl GameState {
     fn new(cfg: GameConfig, ctx: &mut Context) -> GameResult<GameState> {
         let player_image = Image::new(ctx, "/images/player.png")?;
         let wall_image = Image::new(ctx, "/images/wall.png")?;
+        let mut collision_world = CollisionWorld::new();
 
         let mut player = Entity::new(cfg.tile_size, player_image);
         player.center_on_board(cfg.board_size);
+        player.body_handle = Some(collision_world.new_body(player.pos, player.size));
 
         let mut walls: Vec<Entity> = Vec::new();
 
@@ -149,19 +158,66 @@ impl GameState {
             walls.push(wall)
         }
 
+        for wall in &walls {
+            collision_world.new_body(wall.pos, wall.size);
+        }
+
         Ok(GameState {
             config: cfg,
             input: InputState::new(),
+            collision_world,
             player,
             walls,
         })
     }
+
+    fn render_collision_outlines(&mut self, ctx: &mut Context) {
+        for body in self.collision_world.bodies() {
+            let pos_scaled = body.pos * self.config.win_scale;
+            let size_scaled = body.size * self.config.win_scale;
+
+            let _ = graphics::rectangle(
+                ctx,
+                DrawMode::Line(1.),
+                Rect::new(pos_scaled.x, pos_scaled.y, size_scaled.x, size_scaled.y),
+            );
+        }
+
+        let player_handle = self.player.body_handle.unwrap();
+        let mut touching = self.collision_world.get_touching(player_handle);
+        if !touching.is_empty() {
+            touching.push(self.collision_world.body(player_handle).unwrap());
+            let restore_color = graphics::get_color(ctx);
+            let _ = graphics::set_color(ctx, Color::from_rgb(255, 0, 0));
+
+            for body in touching {
+                let pos_scaled = body.pos * self.config.win_scale;
+                let size_scaled = body.size * self.config.win_scale;
+
+                let _ = graphics::rectangle(
+                    ctx,
+                    DrawMode::Line(2.),
+                    Rect::new(pos_scaled.x, pos_scaled.y, size_scaled.x, size_scaled.y),
+                );
+            }
+            let _ = graphics::set_color(ctx, restore_color);
+        }
+    }
 }
 
 impl EventHandler for GameState {
-    fn update(&mut self, _ctx: &mut Context) -> GameResult<()> {
-        if self.input.move_vec != V2::zero() {
-            self.player.pos += self.input.move_vec.normalized();
+    fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
+        let player_handle = self.player.body_handle.unwrap();
+        {
+            let body = self.collision_world.body_mut(player_handle).unwrap();
+            body.vel = self.input.move_vec.normalized() * (70.);
+        }
+
+        self.collision_world.elapse_time(timer::get_delta(ctx));
+
+        {
+            let body = self.collision_world.body(player_handle).unwrap();
+            self.player.pos = body.pos;
         }
 
         Ok(())
@@ -175,15 +231,23 @@ impl EventHandler for GameState {
             wall.draw(win_scale, ctx)?;
         }
         self.player.draw(win_scale, ctx)?;
+        if self.config.show_collision_outlines {
+            self.render_collision_outlines(ctx);
+        }
 
         graphics::present(ctx);
+        timer::yield_now();
         Ok(())
     }
 
     fn key_down_event(&mut self, ctx: &mut Context, keycode: Keycode, _keymod: Mod, _repeat: bool) {
         if !self.input.handle_key(keycode, true) {
-            if let Keycode::Escape = keycode {
-                ctx.quit().unwrap()
+            match keycode {
+                Keycode::Escape => ctx.quit().unwrap(),
+                Keycode::Tab => {
+                    self.config.show_collision_outlines = !self.config.show_collision_outlines
+                }
+                _ => {}
             }
         }
     }
