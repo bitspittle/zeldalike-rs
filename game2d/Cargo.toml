@@ -1,5 +1,5 @@
 [package]
 name = "game2d"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["BitSpittle <bit.spittle@gmail.com>"]
 edition = "2018"

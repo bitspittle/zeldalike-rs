@@ -7,6 +7,14 @@ fn default_point_is_zero() {
 }
 
 #[test]
+fn point_is_zero_check() {
+    assert_eq!(P2::zero().is_zero(), true);
+    assert_eq!(P2::new(0., 0.).is_zero(), true);
+    assert_eq!(P2::default().is_zero(), true);
+    assert_eq!(P2::new(1., 1.).is_zero(), false);
+}
+
+#[test]
 fn point_x_y_accessors() {
     let pt = P2::new(1., 2.);
     assert_eq!(pt.x, 1.);
@@ -116,6 +124,14 @@ fn point_can_be_divided_by_a_pair() {
 fn default_vector_is_zero() {
     assert_eq!(V2::zero(), V2::new(0., 0.));
     assert_eq!(V2::default(), V2::zero());
+}
+
+#[test]
+fn vector_is_zero_check() {
+    assert_eq!(V2::zero().is_zero(), true);
+    assert_eq!(V2::new(0., 0.).is_zero(), true);
+    assert_eq!(V2::default().is_zero(), true);
+    assert_eq!(V2::new(1., 1.).is_zero(), false);
 }
 
 #[test]
