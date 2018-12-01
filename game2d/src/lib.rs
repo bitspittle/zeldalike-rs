@@ -3,5 +3,6 @@
 
 pub mod collide;
 pub mod geom;
+pub mod grid;
 pub mod pool;
 pub mod shape;

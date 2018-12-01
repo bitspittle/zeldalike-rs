@@ -6,6 +6,7 @@ use ggez::graphics::{self, Color, DrawMode, DrawParam, Image, Point2, Rect};
 use ggez::timer;
 use ggez::{Context, GameResult};
 
+use game2d::collide::CollisionWorldParams;
 use game2d::collide::{BodyHandle, CollisionWorld};
 use game2d::geom::{P2, V2};
 
@@ -107,6 +108,9 @@ impl Entity {
     }
 }
 
+const GROUP_WALL: u32 = game2d::collide::GROUP_0;
+const GROUP_PLYR: u32 = game2d::collide::GROUP_1;
+
 /// Collection of ALL state related to rendering the game - essentially,
 /// represents the game world.
 struct GameState {
@@ -122,11 +126,14 @@ impl GameState {
     fn new(cfg: GameConfig, ctx: &mut Context) -> GameResult<GameState> {
         let player_image = Image::new(ctx, "/images/player.png")?;
         let wall_image = Image::new(ctx, "/images/wall.png")?;
-        let mut collision_world = CollisionWorld::new();
+        let mut collision_world = CollisionWorld::new(CollisionWorldParams {
+            group_pairs: vec![(GROUP_WALL, GROUP_PLYR)],
+            partition_size: (20., 20.),
+        });
 
         let mut player = Entity::new(cfg.tile_size, player_image);
         player.center_on_board(cfg.board_size);
-        player.body_handle = Some(collision_world.new_body(player.pos, player.size));
+        player.body_handle = Some(collision_world.new_body(GROUP_PLYR, player.pos, player.size));
 
         let mut walls: Vec<Entity> = Vec::new();
 
@@ -159,7 +166,7 @@ impl GameState {
         }
 
         for wall in &walls {
-            collision_world.new_body(wall.pos, wall.size);
+            collision_world.new_body(GROUP_WALL, wall.pos, wall.size);
         }
 
         Ok(GameState {
