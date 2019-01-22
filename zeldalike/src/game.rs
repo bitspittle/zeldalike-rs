@@ -2,13 +2,17 @@
 
 use ggez::conf::{Conf, WindowMode, WindowSetup};
 use ggez::event::{self, EventHandler, Keycode, Mod};
-use ggez::graphics::{self, Color, DrawMode, DrawParam, Image, Point2, Rect};
+use ggez::graphics::{self, Color, DrawMode, Image, Rect};
 use ggez::timer;
 use ggez::{Context, GameResult};
 
 use game2d::collide::CollisionWorldParams;
 use game2d::collide::{BodyHandle, CollisionWorld};
-use game2d::geom::{P2, V2};
+use game2d::geom::V2;
+use game2d::ggez::sprite::Sprite;
+use game2d::ggez::sprite::SpriteParams;
+use game2d::ggez::sprite::SpriteSheet;
+use std::rc::Rc;
 
 /// Global game settings
 struct GameConfig {
@@ -97,43 +101,25 @@ impl InputState {
 
 /// Basic object that can be rendered to some area on the screen
 struct Entity {
-    pos: P2,
-    size: V2,
-    image: Image,
+    sprite: Sprite,
     body_handle: Option<BodyHandle>,
 }
 
 impl Entity {
-    fn new(size: V2, image: Image) -> Entity {
+    fn new(sprite: Sprite) -> Entity {
         Entity {
-            pos: P2::zero(),
-            size,
-            image,
+            sprite,
             body_handle: None,
         }
     }
 
-    fn center_on_board(&mut self, board_size: V2) {
-        self.pos = ((board_size - self.size) / 2.).into();
+    pub fn center_on_board(&mut self, board_size: V2) {
+        self.sprite.pos = ((board_size - self.sprite.size()) / 2.).into();
     }
 
-    fn set_tile_pos(&mut self, tile_size: V2, tile_index_x: i32, tile_index_y: i32) {
+    pub fn set_tile_pos(&mut self, tile_size: V2, tile_index_x: i32, tile_index_y: i32) {
         let tile_pos = tile_size * [tile_index_x as f32, tile_index_y as f32];
-        self.pos = tile_pos.into();
-    }
-
-    fn draw(&self, ctx: &mut Context) -> GameResult<()> {
-        // Scale image so it fits (e.g. a 64x64 image on a 32x32 entity -> 0.5x0.5 scale)
-        let image_size = [self.image.width() as f32, self.image.height() as f32];
-        let image_ratio = (self.size) / image_size;
-
-        let draw_params = DrawParam {
-            dest: Point2::new(self.pos.x, self.pos.y),
-            scale: Point2::new(image_ratio.x, image_ratio.y),
-            ..Default::default()
-        };
-
-        graphics::draw_ex(ctx, &self.image, draw_params)
+        self.sprite.pos = tile_pos.into();
     }
 }
 
@@ -153,16 +139,26 @@ struct GameState {
 impl GameState {
     #[allow(clippy::new_ret_no_self)] // Returns Result<Self> instead of Self
     fn new(cfg: GameConfig, ctx: &mut Context) -> GameResult<GameState> {
-        let player_image = Image::new(ctx, "/images/player.png")?;
-        let wall_image = Image::new(ctx, "/images/wall.png")?;
+        let player_sheet = Rc::new(SpriteSheet {
+            image: Image::new(ctx, "/images/player.png")?,
+            tile_size: V2::new(16., 16.),
+            num_tiles: (8, 2),
+        });
+        let wall_sheet = Rc::new(SpriteSheet {
+            image: Image::new(ctx, "/images/wall.png")?,
+            tile_size: V2::new(16., 16.),
+            num_tiles: (1, 1),
+        });
+
         let mut collision_world = CollisionWorld::new(CollisionWorldParams {
             group_pairs: vec![[GROUP_WALL, GROUP_PLYR]],
             partition_size: [20., 20.],
         });
 
-        let mut player = Entity::new(cfg.tile_size, player_image);
+        let mut player = Entity::new(Sprite::new(SpriteParams::new(&player_sheet)));
         player.center_on_board(cfg.board_size);
-        player.body_handle = Some(collision_world.new_body(GROUP_PLYR, player.pos, player.size));
+        player.body_handle =
+            Some(collision_world.new_body(GROUP_PLYR, player.sprite.pos, player.sprite.size()));
 
         let mut walls: Vec<Entity> = Vec::new();
 
@@ -170,32 +166,32 @@ impl GameState {
         let num_tiles_y = (cfg.board_size.y / cfg.tile_size.y) as i32;
 
         for tile_x in 0..num_tiles_x {
-            let mut wall = Entity::new(cfg.tile_size, wall_image.clone());
+            let mut wall = Entity::new(Sprite::new(SpriteParams::new(&wall_sheet)));
             wall.set_tile_pos(cfg.tile_size, tile_x as i32, 0);
             walls.push(wall)
         }
 
         for tile_y in 1..(num_tiles_y - 1) {
             {
-                let mut wall = Entity::new(cfg.tile_size, wall_image.clone());
+                let mut wall = Entity::new(Sprite::new(SpriteParams::new(&wall_sheet)));
                 wall.set_tile_pos(cfg.tile_size, 0, tile_y as i32);
                 walls.push(wall)
             }
             {
-                let mut wall = Entity::new(cfg.tile_size, wall_image.clone());
+                let mut wall = Entity::new(Sprite::new(SpriteParams::new(&wall_sheet)));
                 wall.set_tile_pos(cfg.tile_size, (num_tiles_x - 1) as i32, tile_y as i32);
                 walls.push(wall)
             }
         }
 
         for tile_x in 0..num_tiles_x {
-            let mut wall = Entity::new(cfg.tile_size, wall_image.clone());
+            let mut wall = Entity::new(Sprite::new(SpriteParams::new(&wall_sheet)));
             wall.set_tile_pos(cfg.tile_size, tile_x as i32, (num_tiles_y - 1) as i32);
             walls.push(wall)
         }
 
         for wall in &walls {
-            collision_world.new_body(GROUP_WALL, wall.pos, wall.size);
+            collision_world.new_body(GROUP_WALL, wall.sprite.pos, wall.sprite.size());
         }
 
         Ok(GameState {
@@ -247,7 +243,7 @@ impl EventHandler for GameState {
 
         {
             let body = self.collision_world.body(player_handle).unwrap();
-            self.player.pos = body.pos;
+            self.player.sprite.pos = body.pos;
         }
 
         Ok(())
@@ -263,9 +259,9 @@ impl EventHandler for GameState {
 
         graphics::clear(ctx);
         for wall in &self.walls {
-            wall.draw(ctx)?;
+            wall.sprite.draw(ctx)?;
         }
-        self.player.draw(ctx)?;
+        self.player.sprite.draw(ctx)?;
         if self.debug.show_body_outlines {
             self.render_collision_outlines(ctx);
         }
@@ -317,6 +313,9 @@ impl Game {
             graphics::get_transform(ctx).append_scaling(cfg.win_scale),
         );
         let _ = graphics::apply_transformations(ctx);
+
+        // "Nearest" filter keeps pixelated sprites looking pixelated after scaling
+        graphics::set_default_filter(ctx, graphics::FilterMode::Nearest);
 
         let state = &mut GameState::new(cfg, ctx).unwrap();
         event::run(ctx, state).unwrap();

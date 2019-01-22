@@ -1,6 +1,6 @@
 [package]
 name = "zeldalike"
-version = "0.1.2"
+version = "0.2.0"
 authors = ["BitSpittle <bit.spittle@gmail.com>"]
 edition = "2018"
 
@@ -8,5 +8,5 @@ edition = "2018"
 game2d = { path = "../game2d" }
 
 [dependencies.ggez]
-version = "0.4.4"
+version = "*" # Reuse ggez from game2d
 features = ["cargo-resource-root"]
